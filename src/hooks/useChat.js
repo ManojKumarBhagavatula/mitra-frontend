@@ -1,8 +1,19 @@
 // src/hooks/useChat.js
 import { useState, useCallback } from "react";
 import axios from "axios";
+import { auth } from "../firebase";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+
+async function getAuthHeaders() {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error("You must be signed in to use Mitra.");
+  }
+
+  const idToken = await user.getIdToken();
+  return { Authorization: `Bearer ${idToken}` };
+}
 
 export function useChat(userId) {
   const [messages, setMessages] = useState([]);
@@ -16,11 +27,16 @@ export function useChat(userId) {
     setLoading(true);
 
     try {
-      const { data } = await axios.post(`${API_URL}/chat`, {
-        session_id: sessionId || userId,
-        message: text,
-        mode,
-      });
+      const headers = await getAuthHeaders();
+      const { data } = await axios.post(
+        `${API_URL}/chat`,
+        {
+          session_id: sessionId || userId,
+          message: text,
+          mode,
+        },
+        { headers }
+      );
 
       setSessionId(data.session_id);
       setPatterns(data.patterns);
@@ -38,7 +54,6 @@ export function useChat(userId) {
         },
       ]);
     } catch (err) {
-      // Log the diagnostic details without exposing server internals in the UI.
       console.error("Mitra chat request failed", {
         url: `${API_URL}/chat`,
         status: err.response?.status,
@@ -46,13 +61,14 @@ export function useChat(userId) {
         message: err.message,
       });
 
-      const detail = err.response?.data?.detail;
       const userMessage =
-        err.response?.status === 500
-          ? "Mitra's server encountered an error. Please try again later."
-          : err.response?.status
-            ? `Request failed (HTTP ${err.response.status}). Please try again.`
-            : "Unable to reach Mitra's server. Check your connection and try again.";
+        err.response?.status === 401
+          ? "Your session has expired. Please sign in again."
+          : err.response?.status === 500 || err.response?.status === 502
+            ? "Mitra's server encountered an error. Please try again later."
+            : err.response?.status
+              ? `Request failed (HTTP ${err.response.status}). Please try again.`
+              : "Unable to reach Mitra's server. Check your connection and try again.";
 
       setMessages((prev) => [
         ...prev,
@@ -63,9 +79,6 @@ export function useChat(userId) {
           id: Date.now() + 1,
         },
       ]);
-
-      // Keep backend detail in the console for debugging only.
-      if (detail) console.error("Mitra backend detail:", detail);
     } finally {
       setLoading(false);
     }
@@ -73,15 +86,20 @@ export function useChat(userId) {
 
   const sendFeedback = useCallback(async (messageId, rating) => {
     try {
-      await axios.post(`${API_URL}/feedback`, {
-        session_id: sessionId,
-        message_id: messageId,
-        rating,
-      });
-    } catch (e) {
-      console.error("Feedback error", e.response?.data || e.message);
+      const headers = await getAuthHeaders();
+      await axios.post(
+        `${API_URL}/feedback`,
+        {
+          session_id: sessionId || userId,
+          message_id: messageId,
+          rating,
+        },
+        { headers }
+      );
+    } catch (err) {
+      console.error("Mitra feedback request failed", err.response?.data || err.message);
     }
-  }, [sessionId]);
+  }, [sessionId, userId]);
 
   const clearChat = useCallback(() => {
     setMessages([]);
