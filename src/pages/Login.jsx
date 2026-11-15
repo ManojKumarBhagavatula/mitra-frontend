@@ -84,7 +84,10 @@ export default function Login() {
           {/* Email form */}
           <form onSubmit={handleEmail} className="space-y-3">
             <input
+              id="email"
+              name="email"
               type="email"
+              autoComplete="email"
               placeholder="Email address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -92,7 +95,10 @@ export default function Login() {
               className="w-full bg-ink-800 border border-ink-700 focus:border-ink-500 text-ink-100 placeholder-ink-500 text-sm py-2.5 px-3.5 rounded-xl outline-none transition-colors"
             />
             <input
+              id="password"
+              name="password"
               type="password"
+              autoComplete={isSignup ? "new-password" : "current-password"}
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
