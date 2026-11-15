@@ -13,7 +13,7 @@ The React frontend for **Mitra**, an adaptive conversational companion. It provi
 
 ## Overview
 
-Mitra is designed to adapt its conversational style to the user's messages. The interface supports three conversation modes:
+Mitra is designed to adapt its conversational style to the user's messages. The interface supports three response modes:
 
 - **Friend** — warm, conversational responses.
 - **Guide** — structured, practical guidance.
@@ -28,7 +28,8 @@ The backend determines the mode when automatic mode is selected. These labels de
 - Automatic mode selection or a selected conversation mode.
 - Display the mode used for each assistant response.
 - Submit thumbs-up or thumbs-down feedback on assistant messages.
-- Communicate with the FastAPI service through an environment-configured API URL.
+- Obtain a Firebase ID token for the signed-in user and send it to the backend as a Bearer token.
+- Configure the backend URL through an environment variable.
 
 ## Architecture
 
@@ -36,7 +37,8 @@ The backend determines the mode when automatic mode is selected. These labels de
 flowchart LR
     U[User] --> FE[React frontend]
     FE --> AUTH[Firebase Authentication]
-    FE --> API[FastAPI backend]
+    AUTH --> TOKEN[Firebase ID token]
+    TOKEN --> API[FastAPI backend]
     API --> DB[(Firebase Firestore)]
     API --> LLM[Groq API]
     API --> PE[Pattern engine]
@@ -45,7 +47,7 @@ flowchart LR
     API --> FE
 ```
 
-The frontend is maintained separately from the backend:
+Repositories:
 
 - **Frontend:** [mitra-frontend](https://github.com/ManojKumarBhagavatula/mitra-frontend)
 - **Backend:** [mitra-backend](https://github.com/ManojKumarBhagavatula/mitra-backend)
@@ -83,9 +85,10 @@ In the Firebase Console:
 1. Create or select your Firebase project.
 2. Register a Web App and copy its Firebase configuration.
 3. Enable **Google** and **Email/Password** under Authentication → Sign-in method.
-4. Update the configuration values in `src/firebase.js`.
+4. Confirm the deployed frontend domain is listed under Authentication → Settings → Authorized domains.
+5. Update the configuration values in `src/firebase.js`.
 
-Firebase web configuration is intended to be present in client applications. Protect your project with appropriate Firebase Authentication settings, authorized domains and Firestore security rules. Never place service-account credentials or private server API keys in frontend code.
+Firebase web configuration is designed to be included in client applications; it is not a substitute for access control. Protect the project with appropriate Authentication settings and authorized domains. Never place service-account credentials or private server API keys in frontend code.
 
 ### 3. Configure the backend URL
 
@@ -101,7 +104,7 @@ Set the backend URL in `.env.local`:
 REACT_APP_API_URL=http://localhost:8000
 ```
 
-For a deployed frontend, set `REACT_APP_API_URL` to the deployed backend's base URL in your hosting provider's environment settings.
+For a deployed frontend, set `REACT_APP_API_URL` to the deployed FastAPI backend URL in your hosting provider's environment settings.
 
 ### 4. Start the development server
 
@@ -117,14 +120,27 @@ The React development server runs at [http://localhost:3000](http://localhost:30
 npm run build
 ```
 
+## How API Authentication Works
+
+The user signs in through Firebase Authentication. Before each protected API request, the frontend calls `auth.currentUser.getIdToken()` and sends the result in the HTTP header:
+
+```http
+Authorization: Bearer <Firebase_ID_Token>
+```
+
+The backend verifies this token with Firebase Admin SDK and checks that the requested chat session belongs to the authenticated Firebase user. The frontend does not send or store the Firebase service-account key.
+
 ## Deployment
 
 The frontend can be deployed to Vercel:
 
 1. Import this GitHub repository into Vercel.
 2. Set `REACT_APP_API_URL` to the deployed FastAPI backend URL.
-3. Add your deployed frontend domain to Firebase Authentication's authorized domains.
-4. Deploy the application.
+3. Add the production frontend domain to Firebase Authentication's authorized domains.
+4. In the backend Render service, set `FRONTEND_ORIGIN` to the exact frontend origin (for example, `https://mitra-frontend-ivory.vercel.app`).
+5. Deploy the frontend and backend.
+
+If you use a different Vercel domain, update the backend's `FRONTEND_ORIGIN` environment variable to match it exactly. CORS does not replace API authentication.
 
 See the [Vercel documentation](https://vercel.com/docs) for framework and deployment settings.
 
