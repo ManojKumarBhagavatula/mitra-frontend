@@ -5,20 +5,19 @@ import axios from "axios";
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 export function useChat(userId) {
-  const [messages, setMessages]     = useState([]);
-  const [sessionId, setSessionId]   = useState(null);
-  const [patterns, setPatterns]     = useState({});
-  const [modeUsed, setModeUsed]     = useState("auto");
-  const [loading, setLoading]       = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [sessionId, setSessionId] = useState(null);
+  const [patterns, setPatterns] = useState({});
+  const [modeUsed, setModeUsed] = useState("auto");
+  const [loading, setLoading] = useState(false);
 
   const sendMessage = useCallback(async (text, mode = "auto") => {
-    // Add user message immediately
     setMessages((prev) => [...prev, { role: "user", content: text, id: Date.now() }]);
     setLoading(true);
 
     try {
       const { data } = await axios.post(`${API_URL}/chat`, {
-        session_id: sessionId || userId, // use Firebase UID as session ID
+        session_id: sessionId || userId,
         message: text,
         mode,
       });
@@ -39,15 +38,34 @@ export function useChat(userId) {
         },
       ]);
     } catch (err) {
+      // Log the diagnostic details without exposing server internals in the UI.
+      console.error("Mitra chat request failed", {
+        url: `${API_URL}/chat`,
+        status: err.response?.status,
+        response: err.response?.data,
+        message: err.message,
+      });
+
+      const detail = err.response?.data?.detail;
+      const userMessage =
+        err.response?.status === 500
+          ? "Mitra's server encountered an error. Please try again later."
+          : err.response?.status
+            ? `Request failed (HTTP ${err.response.status}). Please try again.`
+            : "Unable to reach Mitra's server. Check your connection and try again.";
+
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: "Something went wrong. Please try again.",
+          content: userMessage,
           mode: "error",
           id: Date.now() + 1,
         },
       ]);
+
+      // Keep backend detail in the console for debugging only.
+      if (detail) console.error("Mitra backend detail:", detail);
     } finally {
       setLoading(false);
     }
@@ -61,7 +79,7 @@ export function useChat(userId) {
         rating,
       });
     } catch (e) {
-      console.error("Feedback error", e);
+      console.error("Feedback error", e.response?.data || e.message);
     }
   }, [sessionId]);
 
